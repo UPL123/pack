@@ -140,7 +140,7 @@ export * from '${host}/${name}@${data.version}/${dest}';`,
         await p.status();
         const end = performance.now();
         const content = new TextDecoder().decode(
-          Deno.readFileSync("tmp/file.js"),
+          await Deno.readFile("tmp/file.js"),
         );
         emptyDirSync("./tmp");
         return new Response(
