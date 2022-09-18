@@ -23,7 +23,7 @@ throw new Error(\`[Pack] ${msg}\`)`,
 
 export async function npmHandler(
   url: URL,
-  request: Request,
+  build: typeof esbuild.build,
 ): Promise<Response> {
   // Basic setup
   const start = performance.now();
@@ -134,12 +134,7 @@ export * from '${host}/${name}@${data.version}/${dest}';`,
         let bundle = query.get("bundle") === "true" ? true : false || true;
         let content = text;
         if (dest.endsWith("js" || ".mjs" || "cjs")) {
-          // Initialize esbuild
-          await esbuild.initialize({
-            wasmURL: "https://deno.land/x/esbuild@v0.15.7/esbuild.wasm",
-            worker: false,
-          });
-          let result = await esbuild.build({
+          let result = await build({
             stdin: {
               contents: text,
             },
