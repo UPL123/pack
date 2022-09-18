@@ -134,6 +134,11 @@ export * from '${host}/${name}@${data.version}/${dest}';`,
         let bundle = query.get("bundle") === "true" ? true : false || true;
         let content = text;
         if (dest.endsWith("js" || ".mjs" || "cjs")) {
+          // Initialize esbuild
+          await esbuild.initialize({
+            wasmURL: "https://deno.land/x/esbuild@v0.15.7/esbuild.wasm",
+            worker: true,
+          });
           let result = await esbuild.build({
             stdin: {
               contents: text,
@@ -178,6 +183,7 @@ export * from '${host}/${name}@${data.version}/${dest}';`,
           });
           content = result.outputFiles[0].text;
         }
+        esbuild.stop();
         if (!data.exports) {
           dest = data.types;
         } else {

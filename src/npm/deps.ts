@@ -1,4 +1,4 @@
-export * as esbuild from "https://deno.land/x/esbuild@v0.15.7/mod.js";
+export * as esbuild from "https://deno.land/x/esbuild@v0.15.7/wasm.js";
 export { Untar } from "https://deno.land/std@0.156.0/archive/tar.ts";
 export {
   readAll,
