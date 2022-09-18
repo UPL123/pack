@@ -137,7 +137,7 @@ export * from '${host}/${name}@${data.version}/${dest}';`,
           // Initialize esbuild
           await esbuild.initialize({
             wasmURL: "https://deno.land/x/esbuild@v0.15.7/esbuild.wasm",
-            worker: true,
+            worker: false,
           });
           let result = await esbuild.build({
             stdin: {
