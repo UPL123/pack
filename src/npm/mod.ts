@@ -1,10 +1,8 @@
 // Imports
 import {
-  copy,
-  emptyDirSync,
-  ensureDir,
-  ensureFile,
   esbuild,
+  path,
+  readAll,
   readerFromStreamReader,
   semver,
   Untar,
@@ -16,6 +14,7 @@ function error(msg: string) {
 throw new Error(\`[Pack] ${msg}\`)`,
     {
       headers: {
+        "access-control-allow-origin": "*",
         "content-type": "text/javascript",
       },
     },
@@ -76,7 +75,25 @@ export async function npmHandler(
   // If is a sub module
   if (submodule !== "") {
     try {
-      dest = data.exports["./" + submodule].import.replace("./", "");
+      let exports: string[] = [];
+      for (var key in data.exports) {
+        exports.push(key);
+      }
+      let exp = exports.filter((x: string) => x.endsWith("*"));
+      if (exp[0]) {
+        for (var ex of exp) {
+          if (submodule.startsWith(ex.replace("*", "").replace("./", ""))) {
+            dest = data.exports[ex].import.replace("./", "").replace(
+              "*",
+              submodule.replace(ex.replace("*", "").replace("./", ""), ""),
+            );
+            break;
+          }
+          dest = data.exports["./" + submodule].import.replace("./", "");
+        }
+      } else {
+        dest = data.exports["./" + submodule].import.replace("./", "");
+      }
       // If is normal package
       return new Response(
         `/* Pack - Servered '${name}@${data.version}/${submodule}' on ${
@@ -85,70 +102,100 @@ export async function npmHandler(
 export * from '${host}/${name}@${data.version}/${dest}';`,
         {
           headers: {
+            "access-control-allow-origin": "*",
             "content-type": "text/javascript",
           },
         },
       );
     } catch (e) {
       // Is a file
+      dest = submodule;
+      if (data.exports) {
+        if (data.exports["./" + submodule]) {
+          dest = data.exports["./" + submodule].import.replace("./", "");
+        }
+      }
       const tarball = data.dist.tarball;
-      const res = await fetch(tarball);
+      const res = await fetch(tarball, { keepalive: true });
       const stream = res.body?.pipeThrough(new DecompressionStream("gzip"))
         .getReader();
       const untar = new Untar(readerFromStreamReader(stream!));
-      const random = Math.floor(performance.now());
+      let text = "";
       for await (const entry of untar) {
-        if (entry.type === "directory") {
-          console.log(entry.fileName);
-          if (entry.fileName == "package") {
-            await ensureDir("tmp/" + entry.fileName + "-" + random);
-          } else {
-            await ensureDir("tmp/" + entry.fileName);
-          }
-          continue;
+        if (entry.fileName == "package/" + dest) {
+          text = new TextDecoder().decode(await readAll(entry));
         }
-        await ensureFile("tmp/" + entry.fileName);
-        const file = await Deno.open("tmp/" + entry.fileName, { write: true });
-        await copy(entry, file);
       }
-      let dest = "";
-      if (!data.exports) {
-        dest = data.module || data.main;
-      } else {
-        if (data.exports["./" + submodule]) {
-          dest = data.exports["./" + submodule].import.replace("./", "");
-        } else {
-          dest = data.exports["."].import.replace("./", "");
-        }
+      if (text == "") {
+        return error(`Cannot find file '${name}@${data.version}/${dest}'`);
       }
       try {
-        let minify = query.get("minify") || true;
-        let bundle = query.get("bundle") || false;
-        const p = Deno.run({
-          cmd: [
-            "go",
-            "run",
-            "src/npm/build.go",
-            `tmp/package/${dest}`,
-            query.get("target") || "es2022",
-            `${minify}`,
-            `${bundle}`,
-            "tmp/file.js",
-            host,
-          ],
-        });
-        await p.status();
+        let minify = query.get("minify") === "true" ? true : false || true;
+        let bundle = query.get("bundle") === "true" ? true : false || true;
+        let content = text;
+        if (dest.endsWith("js" || ".mjs" || "cjs")) {
+          let result = await esbuild.build({
+            stdin: {
+              contents: text,
+            },
+            format: "esm",
+            target: query.get("target") || "es2022",
+            minify,
+            bundle,
+            plugins: [
+              {
+                name: "pack-resolver",
+                setup: (build) => {
+                  // Module:  /^@?(([a-z0-9]+-?)+\/?)+$/
+                  // Dir: /^(\/[^\/]+){0,2}\/?$/gm
+                  build.onResolve(
+                    { filter: /^@?(([a-z0-9]+-?)+\/?)+$/ },
+                    (args) => {
+                      return {
+                        path: `${host}/${args.path}`,
+                        external: true,
+                      };
+                    },
+                  );
+                  build.onResolve(
+                    {
+                      filter:
+                        /\.?((\/|\\|\/\/|https?:\\\\|https?:\/\/)[a-z0-9_@\-^!#$%&+={}.\/\\\[\]]+)$/i,
+                    },
+                    (args) => {
+                      return {
+                        path: `${host}/${name}@${data.version}/${
+                          path.join(dest, "..", args.path).replace("\\", "/")
+                        }`,
+                        external: true,
+                      };
+                    },
+                  );
+                },
+              },
+            ],
+            write: false,
+          });
+          content = result.outputFiles[0].text;
+        }
+        if (!data.exports) {
+          dest = data.types;
+        } else {
+          if (data.exports["./" + submodule]) {
+            dest = data.exports["./" + submodule].types;
+          } else {
+            dest = data.types;
+          }
+        }
         const end = performance.now();
-        const content = new TextDecoder().decode(
-          await Deno.readFile("tmp/file.js"),
-        );
-        emptyDirSync("./tmp");
         return new Response(
           `/* Pack - Compiled in ${Math.floor(end - start)}ms*/
 ${content}`,
           {
             headers: {
+              "access-control-allow-origin": "*",
               "content-type": "text/javascript",
+              "x-typescript-types": `${host}/${name}@${data.version}/${dest}`,
             },
           },
         );
@@ -159,7 +206,10 @@ ${content}`,
     }
   }
 
-  dest = data.module.replace("./", "") || data.main.replace("./", "");
+  dest = data.main.replace("./", "");
+  if (data.module) dest = data.module.replace("./", "");
+
+  let types = data.types || data.typings;
 
   // If is normal package
   return new Response(
@@ -169,7 +219,9 @@ ${content}`,
 export * from '${host}/${name}@${data.version}/${dest}';`,
     {
       headers: {
+        "access-control-allow-origin": "*",
         "content-type": "text/javascript",
+        "x-typescript-types": `${host}/${name}@${data.version}/${types}`,
       },
     },
   );

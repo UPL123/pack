@@ -6,30 +6,151 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pack</title>
     <style>
+      @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700;900&display=swap");
       * {
-        font-family: "Segoe UI";
+        font-family: "Roboto", sans-serif;
+      }
+      pre {
+        background-color: rgb(233, 233, 233);
+        padding: 20px;
+        border-radius: 10px;
+      }
+      code,
+      code * {
+        font-family: monospace;
+      }
+      code .key {
+        font-weight: 900;
+        color: #f00;
+      }
+      code .string {
+        font-style: italic;
+        color: rgb(65, 161, 0);
+      }
+      .title {
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid #e4e4e4;
+      }
+      .title * {
+        margin-right: 10px;
+      }
+      .title svg {
+        margin-top: 10px;
+      }
+      body {
+        display: flex;
+        justify-content: center;
+      }
+      .container {
+        margin: 50px;
+        width: 1024px;
+      }
+      button {
+        font-size: 16px;
+        padding: 10px;
+        padding-left: 20px;
+        padding-right: 20px;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+        background: rgb(0, 89, 255);
+        color: white;
+      }
+      button:hover {
+        background: rgb(0, 102, 255);
+      }
+
+      .gray {
+        text-transform: uppercase;
+        font-size: small;
+        color: rgb(163, 163, 163);
+      }
+      .gray-l {
+        font-size: 15px;
+        color: rgb(163, 163, 163);
+        font-family: monospace;
+      }
+
+      a:hover svg {
+        stroke: #000;
+        fill: #000;
+      }
+
+      @media (max-width: 783px) {
+        body {
+          margin: 20px;
+          display: block;
+        }
+        .container {
+          margin: 0;
+          width: 100%;
+        }
+      }
+
+      .flex {
+        display: flex;
+      }
+      .flex * {
+        margin-right: 20px;
       }
     </style>
   </head>
   <body>
-    <h1>Pack</h1>
-    <hr />
-    Pack is a fast <a href="https://deno.land">Deno</a> and
-    <a href="https://go.dev">Go</a> powered Content Delivery Network for NPM.
+    <div class="container">
+      <div class="title">
+        <h1>Pack <span class="gray">v1 beta</span></h1>
+        <a href="https://github.com/UPL123/pack">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="icon icon-tabler icon-tabler-brand-github"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            stroke-width="2"
+            stroke="rgb(163, 163, 163)"
+            fill="rgb(163, 163, 163)"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+            <path
+              d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"
+            />
+          </svg>
+        </a>
+      </div>
+      <p>
+        Pack is a fast <a href="https://deno.land">Deno</a> powered Content
+        Delivery Network for <a href="https://www.npmjs.com/">NPM</a>
+      </p>
+      <h2>Example</h2>
+      <p>Import Path To Regexp</p>
+      <pre><code><span class="key">import</span> { pathToRegexp } <span class="key">from</span> <span class="string">"https://pack.deno.dev/path-to-regexp"</span>;
+
+console.log(pathToRegexp(<span class="string">"/asd/asd"</span>));</code></pre>
+      <div class="flex">
+        <button onclick="test1();">Run</button>
+        <p class="gray-l" id="1"></p>
+      </div>
+      <h2>On beta</h2>
+      <p>
+        This project may contain errors, bugs, etc. In that case, please report
+        them in the
+        <a href="https://github.com/UPL123/pack/issues">issue page</a>
+      </p>
+    </div>
     <script type="module">
-      import * as THREE from "http://localhost:8000/three";
-
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        1000
-      );
-
-      const renderer = new THREE.WebGLRenderer();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
+      window.test1 = async () => {
+        const s = performance.now();
+        const { pathToRegexp } = await import(
+          "http://localhost:8000/path-to-regexp"
+        );
+        const result = pathToRegexp("/asd/asd");
+        const e = performance.now();
+        const el = document.getElementById("1");
+        el.textContent = `${result} in ${Math.floor(e - s)}ms`;
+      };
     </script>
   </body>
 </html>
