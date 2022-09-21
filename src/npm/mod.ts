@@ -1,6 +1,5 @@
 // Imports
 import {
-  commonjs,
   esbuild,
   path,
   readAll,
