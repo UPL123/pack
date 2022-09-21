@@ -1,0 +1,33 @@
+name: Failed Import
+description: File a failed import.
+title: "[Failed]: "
+labels: ["failed-import"]
+assignees:
+  - UPL123
+body:
+  - type: markdown
+    attributes:
+      value: "# Import report"
+  - type: input
+    id: url
+    attributes:
+      label: Import link
+      description: Put here the url you tried to get.
+      placeholder: https://pack.deno.dev/....
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error
+      description: Please go to that url and copy and paste the error you got.
+      render: js,
+    validations:
+      required: true
+  - type: input
+    id: info
+    attributes:
+      label: More information
+      description: If you have more information about this, please type it here.
+    validations:
+      required: false
