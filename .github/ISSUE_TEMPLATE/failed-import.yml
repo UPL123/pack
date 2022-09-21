@@ -7,7 +7,7 @@ assignees:
 body:
   - type: markdown
     attributes:
-      value: # Import report
+      value: "# Import report"
   - type: input
     id: url
     attributes:
