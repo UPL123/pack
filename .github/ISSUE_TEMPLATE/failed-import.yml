@@ -21,7 +21,7 @@ body:
     attributes:
       label: Error
       description: Please go to that url and copy and paste the error you got.
-      render: js,
+      render: JavaScript
     validations:
       required: true
   - type: input
