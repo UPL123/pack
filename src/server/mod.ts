@@ -1,12 +1,22 @@
 import { npmHandler } from "../npm/mod.ts";
-import { http, path } from "./deps.ts";
+import { denoHandler } from "../deno/mod.ts";
+import { esbuild, http, path } from "./deps.ts";
 
-export function server() {
+export async function server() {
+  await esbuild.initialize({
+    wasmURL: "https://deno.land/x/esbuild@v0.15.8/esbuild.wasm",
+    worker: false,
+  });
+  const build = esbuild.build;
   http.serve(async (req) => {
     const url = new URL(req.url);
 
-    if (url.pathname.length >= 2) {
-      return npmHandler(url);
+    if (url.pathname.startsWith("/npm")) {
+      return npmHandler(url, build);
+    }
+
+    if (url.pathname.startsWith("/deno")) {
+      return denoHandler(url, build);
     }
 
     const body = await Deno.readFile(path.join(Deno.cwd(), "index.html"));
@@ -16,4 +26,5 @@ export function server() {
       },
     });
   });
+  esbuild.stop();
 }

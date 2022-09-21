@@ -10,10 +10,17 @@
       * {
         font-family: "Roboto", sans-serif;
       }
+      #confetti {
+        position: fixed;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+      }
       pre {
         background-color: rgb(233, 233, 233);
         padding: 20px;
         border-radius: 10px;
+        overflow: auto;
       }
       code,
       code * {
@@ -97,6 +104,7 @@
     </style>
   </head>
   <body>
+    <canvas id="confetti"></canvas>
     <div class="container">
       <div class="title">
         <h1>Pack <span class="gray">v1 beta</span></h1>
@@ -122,16 +130,40 @@
       </div>
       <p>
         Pack is a fast <a href="https://deno.land">Deno</a> powered Content
-        Delivery Network for <a href="https://www.npmjs.com/">NPM</a>
+        Delivery Network for <a href="https://www.npmjs.com/">NPM</a> and Deno
+        packages as ES Modules
       </p>
       <h2>Example</h2>
-      <p>Import Path To Regexp</p>
-      <pre><code><span class="key">import</span> { pathToRegexp } <span class="key">from</span> <span class="string">"https://pack.deno.dev/path-to-regexp"</span>;
+      <p>Import <code>path-to-regexp</code> from NPM</p>
+      <pre><code><span class="key">import</span> { pathToRegexp } <span class="key">from</span> <span class="string">"https://pack.deno.dev/npm/path-to-regexp"</span>;
 
 console.log(pathToRegexp(<span class="string">"/asd/asd"</span>));</code></pre>
       <div class="flex">
         <button onclick="test1();">Run</button>
         <p class="gray-l" id="1"></p>
+      </div>
+      <p>Import <code>canvas-confetti</code> from NPM</p>
+      <pre><code><span class="key">import</span> confetti <span class="key">from</span> <span class="string">"https://pack.deno.dev/npm/canvas-confetti"</span>;
+
+var myConfetti = confetti.create(canvas, {
+  resize: true,
+  useWorker: true,
+});
+myConfetti({
+  particleCount: 100,
+  spread: 160,
+});</code></pre>
+      <div class="flex">
+        <button onclick="test2();">Run</button>
+        <p class="gray-l" id="2"></p>
+      </div>
+      <p>Import <code>datetime</code> from Deno</p>
+      <pre><code><span class="key">import</span> * as mod <span class="key">from</span> <span class="string">"https://pack.deno.dev/deno/std/datetime/mod.ts"</span>;
+
+console.log(Object.keys(mod))</code></pre>
+      <div class="flex">
+        <button onclick="test3();">Run</button>
+        <p class="gray-l" id="3"></p>
       </div>
       <h2>On beta</h2>
       <p>
@@ -144,12 +176,38 @@ console.log(pathToRegexp(<span class="string">"/asd/asd"</span>));</code></pre>
       window.test1 = async () => {
         const s = performance.now();
         const { pathToRegexp } = await import(
-          "https://pack.deno.dev/path-to-regexp"
+          `${window.location.protocol}//${window.location.host}/npm/path-to-regexp`
         );
         const result = pathToRegexp("/asd/asd");
         const e = performance.now();
         const el = document.getElementById("1");
         el.textContent = `${result} in ${Math.floor(e - s)}ms`;
+      };
+      window.test2 = async () => {
+        const s = performance.now();
+        const confetti = await import(
+          `${window.location.protocol}//${window.location.host}/npm/canvas-confetti`
+        );
+        var myConfetti = confetti.create(document.getElementById("confetti"), {
+          resize: true,
+          useWorker: true,
+        });
+        myConfetti({
+          particleCount: 100,
+          spread: 160,
+        });
+        const e = performance.now();
+        const el = document.getElementById("2");
+        el.textContent = `Confetti in ${Math.floor(e - s)}ms`;
+      };
+      window.test3 = async () => {
+        const s = performance.now();
+        const mod = await import(
+          `${window.location.protocol}//${window.location.host}/deno/std/datetime/mod.ts`
+        );
+        const e = performance.now();
+        const el = document.getElementById("3");
+        el.textContent = `${Object.keys(mod)} in ${Math.floor(e - s)}ms`;
       };
     </script>
   </body>

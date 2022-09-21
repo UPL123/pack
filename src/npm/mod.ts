@@ -1,5 +1,6 @@
 // Imports
 import {
+  commonjs,
   esbuild,
   path,
   readAll,
@@ -8,7 +9,7 @@ import {
   Untar,
 } from "./deps.ts";
 
-function error(msg: string) {
+function error(msg: string, code: number) {
   return new Response(
     `/* Pack v1.0.0 - Error */
 throw new Error(\`[Pack] ${msg}\`)`,
@@ -17,34 +18,52 @@ throw new Error(\`[Pack] ${msg}\`)`,
         "access-control-allow-origin": "*",
         "content-type": "text/javascript",
       },
+      status: code,
     },
   );
 }
 
 export async function npmHandler(
   url: URL,
+  build: typeof esbuild.build,
 ): Promise<Response> {
   // Basic setup
   const start = performance.now();
-  const host = `${url.protocol}//${url.host}`;
+  const host = `${url.protocol}//${url.host}/npm`;
   const query = new URLSearchParams(url.search);
   const paths = url.pathname.split("/");
   paths.shift();
 
-  const name = paths[0].split("@")[0];
-  let version = paths[0].split("@")[1] || "latest";
+  if (!paths[1]) {
+    return error(`Please insert a NPM package name.`, 400);
+  }
 
+  let name = "";
+  let version = "";
+
+  if (paths[1].startsWith("@")) {
+    name = paths[1] + "/" + paths[2].split("@")[0];
+    version = paths[2].split("@")[1] || "latest";
+    paths.shift();
+  } else {
+    name = paths[1].split("@")[0];
+    version = paths[1].split("@")[1] || "latest";
+  }
+
+  paths.shift();
   paths.shift();
 
   const submodule = paths.join("/");
 
   const registry = query.get("registry") || "https://registry.npmjs.org";
+
   let req = await fetch(`${registry}/${name}/${version}`);
   let data = await req.json();
 
   if (!data || req.status == 404) {
     return error(
       `Cannot find '${name}'`,
+      404,
     );
   }
 
@@ -55,11 +74,12 @@ export async function npmHandler(
     if (data.error) {
       return error(
         `Cannot find '${name}@${version}'`,
+        404,
       );
     }
 
     if (!data["dist-tags"][version]) {
-      return error(`Cannot find version '${version}' for '${name}'`);
+      return error(`Cannot find version '${version}' for '${name}'`, 404);
     }
 
     version = data["dist-tags"][version];
@@ -120,33 +140,128 @@ export * from '${host}/${name}@${data.version}/${dest}';`,
         .getReader();
       const untar = new Untar(readerFromStreamReader(stream!));
       let text = "";
+      let prefix = "";
       for await (const entry of untar) {
-        if (entry.fileName == "package/" + dest) {
+        if (entry.fileName.split("/")[0] && !prefix) {
+          prefix = entry.fileName.split("/")[0] + "/";
+        }
+        if (entry.fileName == prefix + dest) {
           text = new TextDecoder().decode(await readAll(entry));
         }
       }
       if (text == "") {
-        return error(`Cannot find file '${name}@${data.version}/${dest}'`);
+        return error(`Cannot find file '${name}@${data.version}/${dest}'`, 404);
       }
       try {
         let minify = query.get("minify") === "true" ? true : false || true;
         let bundle = query.get("bundle") === "true" ? true : false || true;
         let content = text;
-        if (dest.endsWith("js" || ".mjs" || "cjs")) {
-          // Initialize esbuild
-          await esbuild.initialize({
-            wasmURL: "https://deno.land/x/esbuild@v0.15.7/esbuild.wasm",
-            worker: false,
-          });
-          let result = await esbuild.build({
+        if (
+          dest.endsWith(
+            ".js" || ".jsx" || ".mjs" || ".cjs" || ".ts" || ".tsx" || ".mts" ||
+              ".cts",
+          )
+        ) {
+          let result = await build({
             stdin: {
               contents: text,
             },
             format: "esm",
-            target: query.get("target") || "es2022",
+            target: query.get("target") || "esnext",
             minify,
             bundle,
+            platform: "browser",
             plugins: [
+              {
+                name: "require-to-import",
+                setup(build) {
+                  function matchBrace(text: string, from: number) {
+                    if (!(text[from] === "(")) return -1;
+                    let i, k = 1;
+                    for (i = from + 1; i < text.length && k > 0; ++i) {
+                      if (text[i] === "(") k++;
+                      if (text[i] === ")") k--;
+                    }
+                    let to = i - 1;
+                    if (!(text[to] === ")") || k !== 0) return -1;
+                    return to;
+                  }
+
+                  function makeName(path: string) {
+                    return path.replace(/-(\w)/g, (_, x) => x.toUpperCase())
+                      .replace(/[^$_a-zA-Z0-9]/g, "_");
+                  }
+
+                  build.onLoad({ filter: /\.c?js/ }, async (args) => {
+                    let contents = new TextDecoder().decode(
+                      await Deno.readFile(args.path),
+                    );
+                    let warnings;
+                    try {
+                      ({ warnings } = await esbuild.transform(contents, {
+                        format: "esm",
+                        logLevel: "silent",
+                      }));
+                    } catch (err) {
+                      ({ warnings } = err);
+                    }
+                    let lines = contents.split("\n");
+                    if (
+                      warnings &&
+                      warnings.some((e: any) =>
+                        e.text.includes('"require" to "esm"')
+                      )
+                    ) {
+                      let modifications = [], imports = [];
+                      for (
+                        const { location: { line, lineText, column, length } }
+                          of warnings
+                      ) {
+                        // "require|here|("
+                        let left = column + length;
+                        // "require('a'|here|)"
+                        let right = matchBrace(lineText, left);
+                        if (right === -1) continue;
+                        // "'a'"
+                        let raw = lineText.slice(left + 1, right);
+                        let path;
+                        try {
+                          // 'a'
+                          path = eval(raw); // or, write a real js lexer to parse that
+                          if (typeof path !== "string") continue; // print warnings about dynamic require
+                        } catch (e) {
+                          continue;
+                        }
+                        let name = `__import_${makeName(path)}`;
+                        // "import __import_a from 'a'"
+                        let import_statement = `import ${name} from ${raw};`;
+                        // rewrite "require('a')" -> "__import_a"
+                        let offset = lines.slice(0, line - 1).map((line) =>
+                          line.length
+                        ).reduce((a, b) => a + 1 + b, 0);
+                        modifications.push([
+                          offset + column,
+                          offset + right + 1,
+                          name,
+                        ]);
+                        imports.push(import_statement);
+                      }
+                      if (imports.length === 0) return null;
+                      imports = [...new Set(imports)];
+                      let offset = 0;
+                      for (const [start, end, name] of modifications) {
+                        contents = contents.slice(0, start + offset) + name +
+                          contents.slice(end + offset);
+                        offset += name.length - (end - start);
+                      }
+                      contents = [...imports, "module.exports", contents].join(
+                        ";",
+                      ); // put imports at the first line, so sourcemaps will be ok
+                      return { contents };
+                    }
+                  });
+                },
+              },
               {
                 name: "pack-resolver",
                 setup: (build) => {
@@ -166,11 +281,38 @@ export * from '${host}/${name}@${data.version}/${dest}';`,
                       filter:
                         /\.?((\/|\\|\/\/|https?:\\\\|https?:\/\/)[a-z0-9_@\-^!#$%&+={}.\/\\\[\]]+)$/i,
                     },
-                    (args) => {
+                    async (args) => {
+                      let p = `${host}/${name}@###/${
+                        path.join(dest, "..", args.path).replace("\\", "/")
+                      }`;
+                      const exts = [
+                        ".js",
+                        ".jsx",
+                        ".mjs",
+                        ".cjs",
+                        ".ts",
+                        ".tsx",
+                        ".mts",
+                        ".cts",
+                      ];
+                      const ext = p.split(".")[p.split(".").length];
+                      if (!ext) {
+                        for await (let e of exts) {
+                          const res = await fetch(p + e);
+                          if (res.status === 200) {
+                            p += e;
+                            p = p.replace("###", version);
+                            return {
+                              path: p,
+                              external: true,
+                            };
+                          }
+                        }
+                        throw new Error(`Cannot resolve '${p}'`);
+                      }
+                      p = p.replace("###", version);
                       return {
-                        path: `${host}/${name}@${data.version}/${
-                          path.join(dest, "..", args.path).replace("\\", "/")
-                        }`,
+                        path: p,
                         external: true,
                       };
                     },
@@ -182,7 +324,6 @@ export * from '${host}/${name}@${data.version}/${dest}';`,
           });
           content = result.outputFiles[0].text;
         }
-        esbuild.stop();
         if (!data.exports) {
           dest = data.types;
         } else {
@@ -202,32 +343,40 @@ ${content}`,
               "content-type": "text/javascript",
               "x-typescript-types": `${host}/${name}@${data.version}/${dest}`,
             },
+            status: 200,
           },
         );
       } catch (e) {
         console.error(e.stack);
-        return error(`Compile error: ${e.stack}`);
+        return error(`Compile error: ${e.stack}`, 406);
       }
     }
-  }
+  } else {
+    dest = "index.js";
+    if (data.main) dest = data.main.replace("./", "");
+    if (data.module) dest = data.module.replace("./", "");
 
-  dest = data.main.replace("./", "");
-  if (data.module) dest = data.module.replace("./", "");
+    let types = "index.d.ts";
+    if (data.types) types = data.types.replace("./", "");
+    if (data.typings) types = data.typings.replace("./", "");
 
-  let types = data.types || data.typings;
+    if (name.startsWith("@types")) dest = types;
 
-  // If is normal package
-  return new Response(
-    `/* Pack - Servered '${name}@${data.version}' on ${
-      Math.floor(end - start)
-    }ms */
+    // If is normal package
+    return new Response(
+      `/* Pack - Servered '${name}@${data.version}' on ${
+        Math.floor(end - start)
+      }ms */
 export * from '${host}/${name}@${data.version}/${dest}';`,
-    {
-      headers: {
-        "access-control-allow-origin": "*",
-        "content-type": "text/javascript",
-        "x-typescript-types": `${host}/${name}@${data.version}/${types}`,
+      {
+        headers: {
+          "access-control-allow-origin": "*",
+          "content-type": "text/javascript",
+          "x-typescript-types":
+            `${host}/@types/${name}@${data.version}/${types}`,
+        },
+        status: 200,
       },
-    },
-  );
+    );
+  }
 }
