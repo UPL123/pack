@@ -4,6 +4,7 @@ import { esbuild, http, path } from "./deps.ts";
 
 export async function server() {
   await esbuild.initialize({
+    wasmURL: "https://deno.land/x/esbuild@v0.14.51/esbuild.wasm",
     worker: false,
   });
   const build = esbuild.build;
