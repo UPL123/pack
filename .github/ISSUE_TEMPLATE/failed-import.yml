@@ -7,8 +7,7 @@ assignees:
 body:
   - type: markdown
     attributes:
-      value: |
-        Thanks for reporting this import!
+      value: # Import report
   - type: input
     id: url
     attributes:
@@ -23,7 +22,7 @@ body:
       label: Error
       description: Please go to that url and copy and paste the error you got.
       render: js,
-     validations:
+    validations:
       required: true
   - type: input
     id: info
