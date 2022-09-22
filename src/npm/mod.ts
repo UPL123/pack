@@ -24,6 +24,7 @@ throw new Error(\`[Pack] ${msg}\`)`,
 
 export async function npmHandler(
   url: URL,
+  service: typeof esbuild,
 ): Promise<Response> {
   // Basic setup
   const start = performance.now();
@@ -160,7 +161,7 @@ export * from '${host}/${name}@${data.version}/${dest}';`,
               ".cts",
           )
         ) {
-          let result = await esbuild.build({
+          let result = await service.build({
             stdin: {
               contents: text,
             },

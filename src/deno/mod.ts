@@ -15,7 +15,7 @@ throw new Error(\`[Pack] ${msg}\`);`,
 
 export async function denoHandler(
   url: URL,
-  build: typeof esbuild.build,
+  service: typeof esbuild,
 ): Promise<Response> {
   const start = performance.now();
   const query = new URLSearchParams(url.search);
@@ -75,7 +75,7 @@ export * from '${host}/deno/${name}@${version}/mod.ts'`,
   let bundle = query.get("bundle") === "true" ? true : false || true;
   const ext = p.split(".")[p.split(".").length - 1];
   try {
-    let result = await build({
+    let result = await service.build({
       stdin: {
         contents: text,
         loader: ext as esbuild.Loader || "file",
@@ -113,6 +113,7 @@ export * from '${host}/deno/${name}@${version}/mod.ts'`,
             );
           },
         },
+        denoPlugin(),
       ],
       sourcemap: true,
       write: false,
