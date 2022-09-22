@@ -7,16 +7,15 @@ export async function server() {
     wasmURL: "https://deno.land/x/esbuild@v0.14.51/esbuild.wasm",
     worker: false,
   });
-  const build = esbuild.build;
   http.serve(async (req) => {
     const url = new URL(req.url);
 
     if (url.pathname.startsWith("/npm")) {
-      return npmHandler(url, build);
+      return npmHandler(url);
     }
 
     if (url.pathname.startsWith("/deno")) {
-      return denoHandler(url, build);
+      return denoHandler(url);
     }
 
     const body = await Deno.readFile(path.join(Deno.cwd(), "index.html"));
